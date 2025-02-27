@@ -1,0 +1,23 @@
+{
+  "name": "airdrop",
+  "version": "1.0.0",
+  "description": "Simple Node.js backend app",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js"
+  },
+  "dependencies": {
+    "@polkadot/api": "^15.7.1",
+    "@polkadot/keyring": "^13.4.3",
+    "@polkadot/util": "^13.4.3",
+    "dotenv": "^16.4.7",
+    "express": "^4.18.2",
+    "mysql2": "^3.12.0",
+    "node-fetch": "^2.7.0",
+    "pg": "^8.13.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.3"
+  }
+}
