@@ -149,7 +149,7 @@ app.get('*', async (req, res) => {
           );
 
           connection.release();
-          return res.json({ success: true, amount: transferAmount, txHash });
+          return res.json({ success: true, amount: transferAmount });
         } else {
           console.error('❌ Transaction failed. Admin has probably run out of airdrop funds.');
           res.status(500).json({ success: false, error: 'AIRDROP_NOT_ENOUGH_FUNDS' });
