@@ -86,13 +86,19 @@ app.get('*', async (req, res) => {
     const connection = await pool.getConnection();
 
     const [existingTransaction] = await connection.query(
-      'SELECT 1 FROM airdrop WHERE recipient = ? LIMIT 1',
+      'SELECT amount, timestamp FROM airdrop WHERE recipient = ? LIMIT 1',
       [address]
     );
+    
     if (existingTransaction.length > 0) {
-      connection.release();
-      return res.status(400).json({ success: false, error: 'DUPLICATED_AIRDROP' });
-    }
+      const { amount, timestamp } = existingTransaction[0];
+      const thirtySecondsAgo = Date.now() - 30 * 1000;
+    
+      if (amount > 0 || (timestamp && new Date(timestamp).getTime() > thirtySecondsAgo)) {
+        connection.release();
+        return res.status(400).json({ success: false, error: 'DUPLICATED_AIRDROP' });
+      }
+    }    
 
     // Prevent race conditions
     await connection.query(
@@ -146,7 +152,7 @@ app.get('*', async (req, res) => {
           return res.json({ success: true, amount: transferAmount, txHash });
         } else {
           console.error('❌ Transaction failed. Admin has probably run out of airdrop funds.');
-          res.status(500).json({ success: false, error: 'Admin has probably run out of airdrop funds.' });
+          res.status(500).json({ success: false, error: 'AIRDROP_NOT_ENOUGH_FUNDS' });
         }
       }
     });
