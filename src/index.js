@@ -96,9 +96,9 @@ app.get('*', async (req, res) => {
 
     // Prevent race conditions
     await connection.query(
-      `INSERT IGNORE INTO airdrop (recipient, amount, tx_hash, ip_address, country, country_code, region, region_name, city, zip, latitude, longitude, timezone, isp) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [address, 0, null, ipAddress, null, null, null, null, null, null, null, null, null, null] // Placeholder for geo data
+      `INSERT IGNORE INTO airdrop (recipient, amount, ip_address) 
+       VALUES (?, ?, ?)`,
+      [address, 0, ipAddress]
     );
 
     // Fetch geolocation data
