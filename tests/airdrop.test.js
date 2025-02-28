@@ -33,7 +33,7 @@ describe('Airdrop API Tests', () => {
         expect(response2.body.error).toBe('DUPLICATED_AIRDROP');
     }, 30000);
 
-    test('Receive 9 different airdrops on 9 different addresses', async () => {
+    test('Ask for multiple airdrops simultaneously', async () => {
         const responses = await Promise.all(
             testAddresses.slice(1).map(address =>
                 request(BASE_URL).get(`/?to=${address}`)
