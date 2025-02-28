@@ -5,7 +5,7 @@ import { Keyring } from '@polkadot/keyring';
 import { hexToU8a } from '@polkadot/util';
 import mysql from 'mysql2/promise';
 import { fetch } from 'undici';
-import { gdpPerCapita } from './constants';
+import { getTransferAmount } from './utils';
 import BN from 'bn.js';
 
 const app = express();
@@ -140,7 +140,7 @@ app.get('*', (req: Request, res: Response) => {
 
       const geoData = await getGeolocationData(ipAddress);
       const country = geoData?.countryCode || 'US';
-      const transferAmount = new BN(Math.round(0.15355908906 * gdpPerCapita[country])).mul(new BN('1000000000000'));
+      const transferAmount = getTransferAmount(country)
       const keyring = new Keyring({ type: 'sr25519' });
       const sender = keyring.addFromSeed(hexToU8a(secretSeed));
 

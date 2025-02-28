@@ -1,3 +1,5 @@
+import BN from 'bn.js';
+
 export const gdpPerCapita: Record<string, number> = {
     LU: 106343,
     IE: 91648,
@@ -187,3 +189,7 @@ export const gdpPerCapita: Record<string, number> = {
     BI: 254,
     LO: 10
 };
+
+export function getTransferAmount(country: string) : BN {
+    return new BN(Math.round(0.15355908906 * gdpPerCapita[country])).mul(new BN('1000000000000'));
+}
