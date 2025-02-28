@@ -29,7 +29,7 @@ async function initPolkadotApi() {
   api = await ApiPromise.create({ provider });
 
   provider.on('disconnected', async () => {
-    console.error('❌ Disconnected from Polkadot node. Reconnecting...');
+    console.error('❌ Disconnected from Slon node. Reconnecting...');
     setTimeout(initPolkadotApi, 5000); // Try reconnecting in 5s
   });
 
@@ -38,7 +38,7 @@ async function initPolkadotApi() {
   });
 
   provider.on('connected', () => {
-    console.log('✅ Reconnected to Polkadot node!');
+    console.log('✅ Reconnected to Slon node!');
   });
 }
 
@@ -156,8 +156,8 @@ app.get('*', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error processing request:', error);
-    res.status(500).json({ success: false, details: error.message });
+    console.error('❌ Error processing request:', error);
+    res.status(500).json({ success: false, details: 'Error processing request.' });
   }
 });
 
