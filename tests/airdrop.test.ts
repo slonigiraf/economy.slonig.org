@@ -4,6 +4,7 @@ import { cryptoWaitReady } from '@polkadot/util-crypto';
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import dotenv from 'dotenv';
 import type { AccountInfo } from '@polkadot/types/interfaces';
+import '@polkadot/api-augment'; // Don't remove: https://github.com/polkadot-js/api/releases/tag/v7.0.1
 
 dotenv.config();
 

@@ -7,6 +7,7 @@ import mysql from 'mysql2/promise';
 import { fetch } from 'undici';
 import { getTransferAmount } from './utils';
 import BN from 'bn.js';
+import '@polkadot/api-augment'; // Don't remove: https://github.com/polkadot-js/api/releases/tag/v7.0.1
 
 const app = express();
 const PORT: number = parseInt(process.env.PORT || '3000', 10);
