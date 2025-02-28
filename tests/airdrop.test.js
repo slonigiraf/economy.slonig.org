@@ -21,15 +21,6 @@ describe('Airdrop API Tests', () => {
         testAddresses = await generateTestAddresses(10);
     });
 
-    test('Receive 9 different airdrops on 9 different addresses', async () => {
-        for (let i = 1; i < testAddresses.length; i++) {
-            const response = await request(BASE_URL).get(`/?to=${testAddresses[i]}`);
-            expect(response.status).toBe(200);
-            expect(response.body.success).toBe(true);
-            expect(response.body.amount).toBe(10_000_000_000_000);
-        }
-    }, 30000);
-
     test('Receive an airdrop on an address but fail to get the duplicated one', async () => {
         const address = testAddresses[0];
         const response1 = await request(BASE_URL).get(`/?to=${address}`);
@@ -40,5 +31,19 @@ describe('Airdrop API Tests', () => {
         expect(response2.status).toBe(400);
         expect(response2.body.success).toBe(false);
         expect(response2.body.error).toBe('DUPLICATED_AIRDROP');
+    }, 30000);
+
+    test('Receive 9 different airdrops on 9 different addresses', async () => {
+        const responses = await Promise.all(
+            testAddresses.slice(1).map(address =>
+                request(BASE_URL).get(`/?to=${address}`)
+            )
+        );
+    
+        responses.forEach(response => {
+            expect(response.status).toBe(200);
+            expect(response.body.success).toBe(true);
+            expect(response.body.amount).toBe(10_000_000_000_000);
+        });
     }, 30000);
 });
