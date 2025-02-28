@@ -84,16 +84,16 @@ app.get('*', async (req, res) => {
     const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
 
     if (!address || address.length < 10) {
-      return res.status(400).json({ error: 'Invalid Polkadot address format. Use ?to=ADDRESS' });
+      return res.status(400).json({ success: false, error: 'Invalid account format.' });
     }
 
     if (!api) {
-      return res.status(500).json({ error: 'Polkadot API not initialized' });
+      return res.status(500).json({ success: false, error: 'Polkadot API not initialized' });
     }
 
     const secretSeed = process.env.AIRDROP_SECRET_SEED;
     if (!secretSeed) {
-      return res.status(500).json({ error: 'AIRDROP_SECRET_SEED environment variable not set' });
+      return res.status(500).json({ success: false, error: 'AIRDROP_SECRET_SEED environment variable not set' });
     }
 
     const connection = await pool.getConnection();
@@ -104,47 +104,60 @@ app.get('*', async (req, res) => {
     
     if (existingTransaction.length > 0) {
       connection.release();
-      return res.status(400).json({ error: 'This address has already received funds.' });
+      return res.status(400).json({ success: false, details: 'Your account has previously received funds. If you want more Slon, try getting them from your classmates.' });
     }
     
     const geoData = await getGeolocationData(ipAddress);
     const keyring = new Keyring({ type: 'sr25519' });
     const sender = keyring.addFromSeed(hexToU8a(secretSeed));
-    const transfer = await api.tx.balances.transfer(address, 10_000_000_000_000);
-    const hash = await transfer.signAndSend(sender);
-    const txHash = hash.toHex();
+    const defaultTransferAmount = 10_000_000_000_000;
+    const transferAmount = defaultTransferAmount;
+    const transfer = api.tx.balances.transfer(address, transferAmount);
     
-    await connection.query(
-      `INSERT INTO airdrop 
-       (recipient, amount, tx_hash, ip_address, country, country_code, region, region_name, city, zip, latitude, longitude, timezone, isp) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        address, 
-        10_000_000_000_000, 
-        txHash, 
-        ipAddress,
-        geoData?.country || null,
-        geoData?.countryCode || null,
-        geoData?.region || null,
-        geoData?.regionName || null,
-        geoData?.city || null,
-        geoData?.zip || null,
-        geoData?.lat || null,
-        geoData?.lon || null,
-        geoData?.timezone || null,
-        geoData?.isp || null
-      ]
-    );
-    connection.release();
+    transfer.signAndSend(sender, { nonce: -1 }, async ({ status, events }) => {
+      if (status.isFinalized) {
+        // Check for success event
+        const success = events.some(({ event }) => event.section === 'system' && event.method === 'ExtrinsicSuccess');
+        
+        if (success) {
+          const txHash = transfer.hash.toHex();
+          
+          await connection.query(
+            `INSERT INTO airdrop 
+            (recipient, amount, tx_hash, ip_address, country, country_code, region, region_name, city, zip, latitude, longitude, timezone, isp) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              address, 
+              10_000_000_000_000, 
+              txHash, 
+              ipAddress,
+              geoData?.country || null,
+              geoData?.countryCode || null,
+              geoData?.region || null,
+              geoData?.regionName || null,
+              geoData?.city || null,
+              geoData?.zip || null,
+              geoData?.lat || null,
+              geoData?.lon || null,
+              geoData?.timezone || null,
+              geoData?.isp || null
+            ]
+          );
+          connection.release();
 
-    res.json({ 
-      success: true, 
-      message: `Sent 10 tokens to ${address}`,
-      transactionHash: txHash
+          res.json({ 
+            success: true, 
+            amount: transferAmount
+          });
+        } else {
+          console.error('❌ Transaction failed. Admin has probably run out of airdrop funds.');
+          res.status(500).json({ success: false, error: 'Admin has probably run out of airdrop funds.' });
+        }
+      }
     });
   } catch (error) {
     console.error('Error processing request:', error);
-    res.status(500).json({ error: 'Failed to process transaction', details: error.message });
+    res.status(500).json({ success: false, details: error.message });
   }
 });
 
