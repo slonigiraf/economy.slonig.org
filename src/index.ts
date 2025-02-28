@@ -118,6 +118,21 @@ app.get('*', (req: Request, res: Response) => {
 
       const connection = await pool.getConnection();
 
+      const [rows] = await connection.query<any[]>(
+        'SELECT amount, timestamp FROM airdrop WHERE recipient = ? LIMIT 1',
+        [address]
+      );
+      
+      if (rows.length > 0) {
+        const { amount, timestamp } = rows[0];
+        const thirtySecondsAgo = Date.now() - 30 * 1000;
+      
+        if (amount > 0 || (timestamp && new Date(timestamp).getTime() > thirtySecondsAgo)) {
+          connection.release();
+          return res.status(400).json({ success: false, error: 'DUPLICATED_AIRDROP' });
+        }
+      }
+
       await connection.query(
         `INSERT IGNORE INTO airdrop (recipient, amount, ip_address) VALUES (?, ?, ?)`,
         [address, 0, ipAddress]
