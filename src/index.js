@@ -5,7 +5,8 @@ const { Keyring } = require('@polkadot/keyring');
 const { hexToU8a } = require('@polkadot/util');
 const mysql = require('mysql2/promise');
 const fetch = require('node-fetch');
-import { gdpPerCapita } from './constants';
+const { gdpPerCapita } = require('./constants.js');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -161,7 +162,7 @@ app.get('*', async (req, res) => {
     // Fetch geolocation data
     const geoData = await getGeolocationData(ipAddress);
     const country = geoData?.countryCode || US;
-    const transferAmount = Math.round(0.15355908906 * gdpPerCapita[country]);
+    const transferAmount = BigInt(Math.round(0.15355908906 * gdpPerCapita[country])) * BigInt(1_000_000_000_000);
     const keyring = new Keyring({ type: 'sr25519' });
     const sender = keyring.addFromSeed(hexToU8a(secretSeed));
     const nonce = await getNextNonce(sender.address);
@@ -175,7 +176,7 @@ app.get('*', async (req, res) => {
        WHERE recipient = ?`,
       [
         txHash,
-        transferAmount,
+        transferAmount.toString(),
         geoData?.country || null,
         geoData?.countryCode || null,
         geoData?.region || null,
@@ -191,7 +192,7 @@ app.get('*', async (req, res) => {
     );
 
     connection.release();
-    return res.json({ success: true, amount: transferAmount });
+    return res.json({ success: true, amount: transferAmount.toString() });
 
   } catch (error) {
     console.error('❌ Error processing request:', error);

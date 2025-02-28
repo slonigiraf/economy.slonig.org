@@ -184,5 +184,6 @@ export const gdpPerCapita = {
     MG: 448,
     CF: 398,
     AF: 380,
-    BI: 254
+    BI: 254,
+    LO: 10
   };  
