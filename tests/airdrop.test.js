@@ -18,7 +18,7 @@ describe('Airdrop API Tests', () => {
     let testAddresses = [];
 
     beforeAll(async () => {
-        testAddresses = await generateTestAddresses(10);
+        testAddresses = await generateTestAddresses(100);
     });
 
     test('Receive an airdrop on an address but fail to get the duplicated one', async () => {
@@ -43,7 +43,7 @@ describe('Airdrop API Tests', () => {
         responses.forEach(response => {
             expect(response.status).toBe(200);
             expect(response.body.success).toBe(true);
-            expect(response.body.amount).toBe(10_000_000_000_000);
+            expect(response.body.amount).toBe(1_000_000_000_000);
         });
     }, 30000);
 });

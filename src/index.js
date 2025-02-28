@@ -126,7 +126,7 @@ async function sendTransaction(api, sender, nonce, address, amount) {
 
 app.get('*', async (req, res) => {
   try {
-    const defaultTransferAmount = 10_000_000_000_000;
+    const defaultTransferAmount = 1_000_000_000_000;
     const transferAmount = defaultTransferAmount;
     const address = req.query.to;
     const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
