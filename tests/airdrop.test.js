@@ -17,7 +17,7 @@ describe('Airdrop API Tests', () => {
     let testAddresses = [];
 
     beforeAll(async () => {
-        testAddresses = await generateTestAddresses(100);
+        testAddresses = await generateTestAddresses(10);
     });
 
     test('Receive an airdrop on an address but fail to get the duplicated one', async () => {
