@@ -151,7 +151,7 @@ app.get('*', (req: Request, res: Response) => {
 
       transfer.signAndSend(sender, { nonce }, async ({ status, events }) => {
         try {
-          if (status.isFinalized) {
+          if (status.isInBlock) {
             const success = events.some(({ event }) => event.section === 'system' && event.method === 'ExtrinsicSuccess');
 
             if (success) {
