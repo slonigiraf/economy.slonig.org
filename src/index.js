@@ -74,13 +74,13 @@ app.get('*', async (req, res) => {
     const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
 
     if (!address || address.length < 10) {
-      return res.status(400).json({ success: false, error: 'Invalid account format.' });
+      return res.status(400).json({ success: false, error: 'INVALID_ACCOUNT' });
     }
 
     const api = await getPolkadotApi();
     const secretSeed = process.env.AIRDROP_SECRET_SEED;
     if (!secretSeed) {
-      return res.status(500).json({ success: false, error: 'AIRDROP_SECRET_SEED not set' });
+      return res.status(500).json({ success: false, error: 'AIRDROP_SECRET_SEED_NOT_SET' });
     }
 
     const connection = await pool.getConnection();
@@ -91,7 +91,7 @@ app.get('*', async (req, res) => {
     );
     if (existingTransaction.length > 0) {
       connection.release();
-      return res.status(400).json({ success: false, details: 'Your account has previously received funds. If you want more Slon, try getting them from your classmates.' });
+      return res.status(400).json({ success: false, error: 'DUPLICATED_AIRDROP' });
     }
 
     // Prevent race conditions
@@ -153,7 +153,7 @@ app.get('*', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Error processing request:', error);
-    return res.status(500).json({ success: false, details: 'Error processing request.' });
+    return res.status(500).json({ success: false, error: 'AIRDROP_ERROR' });
   }
 });
 
