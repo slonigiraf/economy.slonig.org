@@ -1,7 +1,5 @@
 const request = require('supertest');
 const { Keyring } = require('@polkadot/keyring');
-const { hexToU8a } = require('@polkadot/util');
-const mysql = require('mysql2/promise');
 require('dotenv').config();
 
 const BASE_URL = process.env.TEST_URL;
