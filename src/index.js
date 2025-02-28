@@ -9,7 +9,7 @@ const fetch = require('node-fetch');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Initialize MySQL connection with increased pool size
+// Initialize MySQL connection
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
   port: process.env.DB_PORT || 3306,
@@ -17,12 +17,14 @@ const pool = mysql.createPool({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   waitForConnections: true,
-  connectionLimit: 30, // Increased to handle concurrent users
+  connectionLimit: 30,
   queueLimit: 0,
 });
 
 // Initialize connection to Polkadot node
 let api = null;
+let currentNonce = null;
+let isFetchingNonce = false;
 
 async function getPolkadotApi() {
   if (!api) {
@@ -31,7 +33,7 @@ async function getPolkadotApi() {
 
     provider.on('disconnected', async () => {
       console.error('❌ Disconnected from Slon node. Reconnecting...');
-      setTimeout(getPolkadotApi, 5000); // Reconnect in 5s
+      setTimeout(getPolkadotApi, 5000);
     });
 
     provider.on('error', (error) => {
@@ -45,8 +47,48 @@ async function getPolkadotApi() {
   return api;
 }
 
-// Initialize API on startup
-getPolkadotApi();
+// Function to get the latest nonce, checking both the blockchain and pending transactions
+async function fetchNonce(senderAddress) {
+  if (isFetchingNonce) {
+    while (isFetchingNonce) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return currentNonce;
+  }
+
+  isFetchingNonce = true;
+  const api = await getPolkadotApi();
+
+  // Get latest nonce from chain
+  const chainNonce = await api.rpc.system.accountNextIndex(senderAddress);
+
+  // Get pending transactions from the pool
+  const pendingExtrinsics = await api.rpc.author.pendingExtrinsics();
+  const senderPendingTxs = pendingExtrinsics.filter((ext) => {
+    return ext.signer.toString() === senderAddress;
+  });
+
+  // Determine the highest nonce in pending transactions
+  let highestPendingNonce = chainNonce.toNumber();
+  for (const tx of senderPendingTxs) {
+    const txNonce = tx.nonce.toNumber();
+    if (txNonce >= highestPendingNonce) {
+      highestPendingNonce = txNonce + 1;
+    }
+  }
+
+  currentNonce = highestPendingNonce;
+  isFetchingNonce = false;
+  return currentNonce;
+}
+
+// Initialize API and fetch initial nonce
+(async () => {
+  await getPolkadotApi();
+  const keyring = new Keyring({ type: 'sr25519' });
+  const sender = keyring.addFromSeed(hexToU8a(process.env.AIRDROP_SECRET_SEED));
+  await fetchNonce(sender.address);
+})();
 
 // Function to get geolocation data from IP
 async function getGeolocationData(ipAddress) {
@@ -63,6 +105,22 @@ async function getGeolocationData(ipAddress) {
   } catch (error) {
     console.error('Error fetching geolocation data:', error);
     return null;
+  }
+}
+
+// Function to send a transaction with a safe nonce
+async function sendTransaction(api, sender, nonce, address, amount) {
+  try {
+    const transfer = api.tx.balances.transfer(address, amount);
+
+    console.log(`🔄 Sending transaction with nonce ${nonce}...`);
+    await transfer.signAndSend(sender, { nonce });
+
+    console.log(`✅ Transaction sent successfully!`);
+    return transfer.hash.toHex();
+  } catch (error) {
+    console.error(`❌ Transaction failed: ${error.message}`);
+    throw error;
   }
 }
 
@@ -89,16 +147,16 @@ app.get('*', async (req, res) => {
       'SELECT amount, timestamp FROM airdrop WHERE recipient = ? LIMIT 1',
       [address]
     );
-    
+
     if (existingTransaction.length > 0) {
       const { amount, timestamp } = existingTransaction[0];
       const thirtySecondsAgo = Date.now() - 30 * 1000;
-    
+
       if (amount > 0 || (timestamp && new Date(timestamp).getTime() > thirtySecondsAgo)) {
         connection.release();
         return res.status(400).json({ success: false, error: 'DUPLICATED_AIRDROP' });
       }
-    }    
+    }
 
     // Prevent race conditions
     await connection.query(
@@ -109,53 +167,40 @@ app.get('*', async (req, res) => {
 
     // Fetch geolocation data
     const geoData = await getGeolocationData(ipAddress);
-    
+
     const keyring = new Keyring({ type: 'sr25519' });
     const sender = keyring.addFromSeed(hexToU8a(secretSeed));
 
-    // Fetch correct nonce to avoid conflicts
-    const nonce = await api.rpc.system.accountNextIndex(sender.address);
+    // Fetch and increment nonce manually
+    const nonce = await fetchNonce(sender.address);
+    currentNonce += 1; // Increment manually for next tx
 
-    
-    const transfer = api.tx.balances.transfer(address, transferAmount);
+    const txHash = await sendTransaction(api, sender, nonce, address, transferAmount);
 
-    transfer.signAndSend(sender, { nonce }, async ({ status, events }) => {
-      if (status.isFinalized) {
-        const success = events.some(({ event }) => event.section === 'system' && event.method === 'ExtrinsicSuccess');
+    // Update the airdrop record with tx hash & geo data
+    await connection.query(
+      `UPDATE airdrop 
+       SET tx_hash = ?, amount = ?, country = ?, country_code = ?, region = ?, region_name = ?, city = ?, zip = ?, latitude = ?, longitude = ?, timezone = ?, isp = ? 
+       WHERE recipient = ?`,
+      [
+        txHash,
+        transferAmount,
+        geoData?.country || null,
+        geoData?.countryCode || null,
+        geoData?.region || null,
+        geoData?.regionName || null,
+        geoData?.city || null,
+        geoData?.zip || null,
+        geoData?.lat || null,
+        geoData?.lon || null,
+        geoData?.timezone || null,
+        geoData?.isp || null,
+        address
+      ]
+    );
 
-        if (success) {
-          const txHash = transfer.hash.toHex();
-          
-          // Update the airdrop record with tx hash & geo data
-          await connection.query(
-            `UPDATE airdrop 
-             SET tx_hash = ?, amount = ?, country = ?, country_code = ?, region = ?, region_name = ?, city = ?, zip = ?, latitude = ?, longitude = ?, timezone = ?, isp = ? 
-             WHERE recipient = ?`,
-            [
-              txHash,
-              transferAmount,
-              geoData?.country || null,
-              geoData?.countryCode || null,
-              geoData?.region || null,
-              geoData?.regionName || null,
-              geoData?.city || null,
-              geoData?.zip || null,
-              geoData?.lat || null,
-              geoData?.lon || null,
-              geoData?.timezone || null,
-              geoData?.isp || null,
-              address
-            ]
-          );
-
-          connection.release();
-          return res.json({ success: true, amount: transferAmount });
-        } else {
-          console.error('❌ Transaction failed. Admin has probably run out of airdrop funds.');
-          res.status(500).json({ success: false, error: 'AIRDROP_NOT_ENOUGH_FUNDS' });
-        }
-      }
-    });
+    connection.release();
+    return res.json({ success: true, amount: transferAmount });
 
   } catch (error) {
     console.error('❌ Error processing request:', error);
