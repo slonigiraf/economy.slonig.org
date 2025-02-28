@@ -24,7 +24,7 @@ const pool = mysql.createPool({
 // Initialize connection to Polkadot node
 let api = null;
 let currentNonce = null;
-let isFetchingNonce = false;
+const nonceQueue = [];
 
 async function getPolkadotApi() {
   if (!api) {
@@ -47,39 +47,34 @@ async function getPolkadotApi() {
   return api;
 }
 
-// Function to get the latest nonce, checking both the blockchain and pending transactions
-async function fetchNonce(senderAddress) {
-  if (isFetchingNonce) {
-    while (isFetchingNonce) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
+// Function to get and increment nonce synchronously
+async function getNextNonce(senderAddress) {
+  return new Promise(async (resolve) => {
+    nonceQueue.push(async () => {
+      const api = await getPolkadotApi();
+
+      if (currentNonce === null) {
+        // First time fetching nonce
+        const chainNonce = await api.rpc.system.accountNextIndex(senderAddress);
+        currentNonce = chainNonce.toNumber();
+      } else {
+        // Increment nonce manually
+        currentNonce += 1;
+      }
+
+      resolve(currentNonce);
+
+      // Remove the processed function from queue
+      nonceQueue.shift();
+      if (nonceQueue.length > 0) {
+        nonceQueue[0]();
+      }
+    });
+
+    if (nonceQueue.length === 1) {
+      nonceQueue[0]();
     }
-    return currentNonce;
-  }
-
-  isFetchingNonce = true;
-  const api = await getPolkadotApi();
-
-  // Get latest nonce from chain
-  const chainNonce = await api.rpc.system.accountNextIndex(senderAddress);
-
-  // Get pending transactions from the pool
-  const pendingExtrinsics = await api.rpc.author.pendingExtrinsics();
-  const senderPendingTxs = pendingExtrinsics.filter((ext) => {
-    return ext.signer.toString() === senderAddress;
   });
-
-  // Determine the highest nonce in pending transactions
-  let highestPendingNonce = chainNonce.toNumber();
-  for (const tx of senderPendingTxs) {
-    const txNonce = tx.nonce.toNumber();
-    if (txNonce >= highestPendingNonce) {
-      highestPendingNonce = txNonce + 1;
-    }
-  }
-
-  currentNonce = highestPendingNonce;
-  isFetchingNonce = false;
-  return currentNonce;
 }
 
 // Initialize API and fetch initial nonce
@@ -87,7 +82,7 @@ async function fetchNonce(senderAddress) {
   await getPolkadotApi();
   const keyring = new Keyring({ type: 'sr25519' });
   const sender = keyring.addFromSeed(hexToU8a(process.env.AIRDROP_SECRET_SEED));
-  await fetchNonce(sender.address);
+  await getNextNonce(sender.address);
 })();
 
 // Function to get geolocation data from IP
@@ -108,7 +103,7 @@ async function getGeolocationData(ipAddress) {
   }
 }
 
-// Function to send a transaction with a safe nonce
+// Function to send a transaction
 async function sendTransaction(api, sender, nonce, address, amount) {
   try {
     const transfer = api.tx.balances.transfer(address, amount);
@@ -170,10 +165,7 @@ app.get('*', async (req, res) => {
 
     const keyring = new Keyring({ type: 'sr25519' });
     const sender = keyring.addFromSeed(hexToU8a(secretSeed));
-
-    // Fetch and increment nonce manually
-    const nonce = await fetchNonce(sender.address);
-    currentNonce += 1; // Increment manually for next tx
+    const nonce = await getNextNonce(sender.address);
 
     const txHash = await sendTransaction(api, sender, nonce, address, transferAmount);
 
