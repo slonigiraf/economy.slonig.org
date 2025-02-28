@@ -108,11 +108,7 @@ async function getGeolocationData(ipAddress) {
 async function sendTransaction(api, sender, nonce, address, amount) {
   try {
     const transfer = api.tx.balances.transfer(address, amount);
-
-    console.log(`🔄 Sending transaction with nonce ${nonce}...`);
     await transfer.signAndSend(sender, { nonce });
-
-    console.log(`✅ Transaction sent successfully!`);
     return transfer.hash.toHex();
   } catch (error) {
     console.error(`❌ Transaction failed: ${error.message}`);
