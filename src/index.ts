@@ -55,7 +55,6 @@ async function getNextNonce(senderAddress: string): Promise<BN> {
       const api = await getPolkadotApi();
       if (currentNonce === null) {
         currentNonce = await api.rpc.system.accountNextIndex(senderAddress);
-        console.log('Fetched nonce from chain:', currentNonce.toString());
       } else {
         currentNonce = currentNonce.add(new BN(1));
       }
