@@ -1,7 +1,7 @@
 {
   "name": "airdrop",
   "version": "1.0.0",
-  "description": "Simple Node.js backend app",
+  "description": "Slon airdrop backend app",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
