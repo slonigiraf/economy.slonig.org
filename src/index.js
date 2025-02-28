@@ -6,6 +6,7 @@ const { hexToU8a } = require('@polkadot/util');
 const mysql = require('mysql2/promise');
 const fetch = require('node-fetch');
 const { gdpPerCapita } = require('./constants.js');
+const BN = require('bn.js');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -53,38 +54,28 @@ async function getNextNonce(senderAddress) {
   return new Promise(async (resolve) => {
     nonceQueue.push(async () => {
       const api = await getPolkadotApi();
-
       if (currentNonce === null) {
-        // First time fetching nonce
-        const chainNonce = await api.rpc.system.accountNextIndex(senderAddress);
-        currentNonce = chainNonce.toNumber();
+        // Fetch nonce from chain if this is the first transaction
+        currentNonce = await api.rpc.system.accountNextIndex(senderAddress);
+        console.log('Fetched nonce from chain:', currentNonce.toString());
       } else {
-        // Increment nonce manually
-        currentNonce += 1;
+        // Increment nonce manually for subsequent transactions
+        currentNonce = currentNonce.add(new BN(1));
       }
-
       resolve(currentNonce);
 
-      // Remove the processed function from queue
+      // Remove processed function from queue
       nonceQueue.shift();
       if (nonceQueue.length > 0) {
         nonceQueue[0]();
       }
     });
-
+    // Only process the first function in the queue
     if (nonceQueue.length === 1) {
       nonceQueue[0]();
     }
   });
 }
-
-// Initialize API and fetch initial nonce
-(async () => {
-  await getPolkadotApi();
-  const keyring = new Keyring({ type: 'sr25519' });
-  const sender = keyring.addFromSeed(hexToU8a(process.env.AIRDROP_SECRET_SEED));
-  await getNextNonce(sender.address);
-})();
 
 // Function to get geolocation data from IP
 async function getGeolocationData(ipAddress) {
@@ -101,18 +92,6 @@ async function getGeolocationData(ipAddress) {
   } catch (error) {
     console.error('Error fetching geolocation data:', error);
     return null;
-  }
-}
-
-// Function to send a transaction
-async function sendTransaction(api, sender, nonce, address, amount) {
-  try {
-    const transfer = api.tx.balances.transfer(address, amount);
-    await transfer.signAndSend(sender, { nonce });
-    return transfer.hash.toHex();
-  } catch (error) {
-    console.error(`❌ Transaction failed: ${error.message}`);
-    throw error;
   }
 }
 
@@ -137,16 +116,16 @@ app.get('*', async (req, res) => {
       'SELECT amount, timestamp FROM airdrop WHERE recipient = ? LIMIT 1',
       [address]
     );
-
+    
     if (existingTransaction.length > 0) {
       const { amount, timestamp } = existingTransaction[0];
       const thirtySecondsAgo = Date.now() - 30 * 1000;
-
+    
       if (amount > 0 || (timestamp && new Date(timestamp).getTime() > thirtySecondsAgo)) {
         connection.release();
         return res.status(400).json({ success: false, error: 'DUPLICATED_AIRDROP' });
       }
-    }
+    }    
 
     // Prevent race conditions
     await connection.query(
@@ -158,37 +137,53 @@ app.get('*', async (req, res) => {
     // Fetch geolocation data
     const geoData = await getGeolocationData(ipAddress);
     const country = geoData?.countryCode || US;
-    const transferAmount = BigInt(Math.round(0.15355908906 * gdpPerCapita[country])) * BigInt(1_000_000_000_000);
+    const transferAmount = new BN(Math.round(0.15355908906 * gdpPerCapita[country])).mul(new BN('1000000000000'));
     const keyring = new Keyring({ type: 'sr25519' });
     const sender = keyring.addFromSeed(hexToU8a(secretSeed));
+
+    // Fetch correct nonce to avoid conflicts
     const nonce = await getNextNonce(sender.address);
+    // const nonce = await api.rpc.system.accountNextIndex(sender.address);
+    
+    const transfer = api.tx.balances.transfer(address, transferAmount);
 
-    const txHash = await sendTransaction(api, sender, nonce, address, transferAmount);
+    transfer.signAndSend(sender, { nonce }, async ({ status, events }) => {
+      if (status.isFinalized) {
+        const success = events.some(({ event }) => event.section === 'system' && event.method === 'ExtrinsicSuccess');
 
-    // Update the airdrop record with tx hash & geo data
-    await connection.query(
-      `UPDATE airdrop 
-       SET tx_hash = ?, amount = ?, country = ?, country_code = ?, region = ?, region_name = ?, city = ?, zip = ?, latitude = ?, longitude = ?, timezone = ?, isp = ? 
-       WHERE recipient = ?`,
-      [
-        txHash,
-        transferAmount.toString(),
-        geoData?.country || null,
-        geoData?.countryCode || null,
-        geoData?.region || null,
-        geoData?.regionName || null,
-        geoData?.city || null,
-        geoData?.zip || null,
-        geoData?.lat || null,
-        geoData?.lon || null,
-        geoData?.timezone || null,
-        geoData?.isp || null,
-        address
-      ]
-    );
+        if (success) {
+          const txHash = transfer.hash.toHex();
+          
+          // Update the airdrop record with tx hash & geo data
+          await connection.query(
+            `UPDATE airdrop 
+             SET tx_hash = ?, amount = ?, country = ?, country_code = ?, region = ?, region_name = ?, city = ?, zip = ?, latitude = ?, longitude = ?, timezone = ?, isp = ? 
+             WHERE recipient = ?`,
+            [
+              txHash,
+              transferAmount.toString(),
+              geoData?.country || null,
+              geoData?.countryCode || null,
+              geoData?.region || null,
+              geoData?.regionName || null,
+              geoData?.city || null,
+              geoData?.zip || null,
+              geoData?.lat || null,
+              geoData?.lon || null,
+              geoData?.timezone || null,
+              geoData?.isp || null,
+              address
+            ]
+          );
 
-    connection.release();
-    return res.json({ success: true, amount: transferAmount.toString() });
+          connection.release();
+          return res.json({ success: true, amount: transferAmount.toString() });
+        } else {
+          console.error('❌ Transaction failed. Admin has probably run out of airdrop funds.');
+          res.status(500).json({ success: false, error: 'AIRDROP_NOT_ENOUGH_FUNDS' });
+        }
+      }
+    });
 
   } catch (error) {
     console.error('❌ Error processing request:', error);
