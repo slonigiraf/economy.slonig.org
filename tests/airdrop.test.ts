@@ -5,11 +5,13 @@ import { ApiPromise, WsProvider } from '@polkadot/api';
 import dotenv from 'dotenv';
 import type { AccountInfo } from '@polkadot/types/interfaces';
 import '@polkadot/api-augment'; // Don't remove: https://github.com/polkadot-js/api/releases/tag/v7.0.1
+import BN from 'bn.js';
 
 dotenv.config();
 
 const BASE_URL = process.env.TEST_URL as string;
 const WS_PROVIDER = process.env.WS_PROVIDER || 'wss://ws-parachain-1.slonigiraf.org';
+const AIRDROP_SECRET_SEED = process.env.AIRDROP_SECRET_SEED as string;
 
 async function getPolkadotApi(): Promise<ApiPromise> {
     const provider = new WsProvider(WS_PROVIDER);
@@ -26,6 +28,27 @@ async function generateTestAddresses(count: number): Promise<string[]> {
     const keyring = new Keyring({ type: 'sr25519' });
     return Array.from({ length: count }, (_, i) => keyring.addFromUri(`//test${i}`).address);
 }
+async function transferFundsBack(api: ApiPromise, senderSeed: string, testAddresses: string[]) {
+    await cryptoWaitReady();
+    const keyring = new Keyring({ type: 'sr25519' });
+    const recipient = keyring.addFromUri(senderSeed);
+    const existentialDeposit: BN = api.consts.balances.existentialDeposit;
+    const transfers = await Promise.all(
+        testAddresses.map(async (testAddress) => {
+            try {
+                const balance = new BN(await getBalance(api, testAddress));
+                if (balance.gt(existentialDeposit)) {
+                    const sender = keyring.addFromUri(testAddress);
+                    const nonce = await api.rpc.system.accountNextIndex(sender.address);
+                    return api.tx.balances.transfer(recipient.address, balance).signAndSend(sender, { nonce });
+                }
+            } catch (error) {
+                console.error(`Error transferring from ${testAddress}:`, error);
+            }
+        })
+    );
+    await Promise.all(transfers);
+}
 
 describe('Airdrop API Tests', () => {
     let testAddresses: string[] = [];
@@ -37,6 +60,12 @@ describe('Airdrop API Tests', () => {
     });
 
     afterAll(async () => {
+        console.log('Transferring funds back to sender...');
+        try {
+            await transferFundsBack(api, AIRDROP_SECRET_SEED, testAddresses);
+        } catch (error) {
+            console.error('Error transferring funds:', error);
+        }
         await api.disconnect();
     });
 
