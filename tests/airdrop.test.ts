@@ -7,6 +7,7 @@ import type { AccountInfo } from '@polkadot/types/interfaces';
 import '@polkadot/api-augment'; // Don't remove: https://github.com/polkadot-js/api/releases/tag/v7.0.1
 import BN from 'bn.js';
 import { oneSlon } from '../src/utils';
+import { KeyringPair } from '@polkadot/keyring/types';
 
 dotenv.config();
 
@@ -38,34 +39,62 @@ async function generateTestAccounts(count: number) {
 
     return accounts;
 }
+/**
+ * Send funds and wait for finalization, unsubscribing along the way.
+ */
+async function transferAndFinalize(
+    api: ApiPromise,
+    from: KeyringPair,
+    to: string,
+    amount: BN
+): Promise<void> {
+    return new Promise(async (resolve, reject) => {
+        try {
+            // signAndSend can return an unsubscribe callback
+            const unsub = await api.tx.balances
+                .transfer(to, amount)
+                .signAndSend(from, (result) => {
+                    // If the transaction fails, reject
+                    if (result.isError) {
+                        unsub();
+                        return reject(new Error('Transaction failed'));
+                    }
+
+                    // If the extrinsic is in a block or finalized, we're good
+                    if (result.status.isInBlock || result.status.isFinalized) {
+                        unsub(); // unsub is crucial to avoid open handles
+                        resolve();
+                    }
+                });
+        } catch (err) {
+            reject(err);
+        }
+    });
+}
 export async function transferFundsBack(
     api: ApiPromise,
-    senderSeed: string,
+    airdropSeed: string,
     testAccounts: { address: string; uri: string }[]
 ): Promise<void> {
     await cryptoWaitReady();
-
     const keyring = new Keyring({ type: 'sr25519' });
-    // This is your main "destination" (the account you want to gather funds into)
-    const recipient = keyring.addFromUri(senderSeed);
 
-    const transfers = await Promise.all(
+    // This is your main "destination" (the account you want to gather funds into)
+    const recipient = keyring.addFromUri(airdropSeed);
+
+    await Promise.all(
         testAccounts.map(async (testAccount) => {
-            try {
-                const balance = new BN(await getBalance(api, testAccount.address));
-                if (balance.gt(oneSlon)) {
-                    const sender = keyring.addFromUri(testAccount.uri);
-                    const nonce = await api.rpc.system.accountNextIndex(sender.address);
-                    return api.tx.balances.transfer(recipient.address, balance.sub(oneSlon)).signAndSend(sender, { nonce });
-                }
-            } catch (error) {
-                console.error(`Error transferring from ${testAccount.address}:`, error);
+            const balance = new BN(await getBalance(api, testAccount.address));
+            // Only transfer if there's something above the dust/1 Slon
+            if (balance.gt(oneSlon)) {
+                const sender = keyring.addFromUri(testAccount.uri);
+                // Use the new helper function
+                await transferAndFinalize(api, sender, recipient.address, balance.sub(oneSlon));
             }
         })
     );
-    
-    await Promise.all(transfers);
 }
+
 
 describe('Airdrop API Tests', () => {
     let testAccounts: { address: string; uri: string }[] = [];
