@@ -11,6 +11,10 @@ import { KeyringPair } from '@polkadot/keyring/types';
 
 dotenv.config();
 
+const testTimeout = 30_000;
+const wsProviderDisconnectTime = 30_000;
+jest.setTimeout(testTimeout + wsProviderDisconnectTime);
+
 const BASE_URL = process.env.TEST_URL as string;
 const WS_PROVIDER = process.env.WS_PROVIDER || 'wss://ws-parachain-1.slonigiraf.org';
 const AIRDROP_SECRET_SEED = process.env.AIRDROP_SECRET_SEED as string;
@@ -111,6 +115,8 @@ describe('Airdrop API Tests', () => {
         } catch (error) {
             console.error('Error transferring funds:', error);
         }
+        // Give a short delay so Polkadot JS can tear down all listeners
+        await new Promise((resolve) => setTimeout(resolve, 100));
         await api.disconnect();
     });
 
@@ -132,7 +138,7 @@ describe('Airdrop API Tests', () => {
 
         // Validate balance increase
         expect(BigInt(finalBalance)).toBe(BigInt(initialBalance) + BigInt(expectedIncrease));
-    }, 30000);
+    }, testTimeout);
 
     test('Check multiple airdrops and validate balances', async () => {
         const initialBalances = await Promise.all(testAccounts.slice(1).map(account => getBalance(api, account.address)));
@@ -155,5 +161,5 @@ describe('Airdrop API Tests', () => {
         finalBalances.forEach((finalBalance, index) => {
             expect(BigInt(finalBalance)).toBe(BigInt(initialBalances[index]) + expectedIncreases[index]);
         });
-    }, 30000);
+    }, testTimeout);
 });

@@ -9,7 +9,7 @@
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
     "watch": "nodemon --exec ts-node src/index.ts",
-    "test": "jest"
+    "test": "jest --detectOpenHandles"
   },
   "dependencies": {
     "@polkadot/api": "^15.7.1",
