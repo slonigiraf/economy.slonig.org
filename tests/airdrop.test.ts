@@ -53,15 +53,12 @@ describe('Airdrop API Tests', () => {
 
         const expectedIncrease = response.body.amount; // Amount in JSON response
 
-        // Wait a few seconds to ensure blockchain finalization
-        await new Promise(resolve => setTimeout(resolve, 10000));
-
         // Fetch new balance
         const finalBalance = await getBalance(api, address);
 
         // Validate balance increase
         expect(BigInt(finalBalance)).toBe(BigInt(initialBalance) + BigInt(expectedIncrease));
-    }, 60000);
+    }, 30000);
 
     test('Check multiple airdrops and validate balances', async () => {
         const initialBalances = await Promise.all(testAddresses.slice(1).map(address => getBalance(api, address)));
@@ -78,14 +75,11 @@ describe('Airdrop API Tests', () => {
 
         const expectedIncreases = responses.map(response => BigInt(response.body.amount));
 
-        // Wait a few seconds for transactions to finalize
-        await new Promise(resolve => setTimeout(resolve, 10000));
-
         const finalBalances = await Promise.all(testAddresses.slice(1).map(address => getBalance(api, address)));
 
         // Validate each balance increase
         finalBalances.forEach((finalBalance, index) => {
             expect(BigInt(finalBalance)).toBe(BigInt(initialBalances[index]) + expectedIncreases[index]);
         });
-    }, 60000);
+    }, 30000);
 });
