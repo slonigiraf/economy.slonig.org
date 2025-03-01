@@ -190,6 +190,9 @@ export const gdpPerCapita: Record<string, number> = {
     LO: 10
 };
 
-export function getTransferAmount(country: string) : BN {
+export function getAirdropAmount(country: string) : BN {
     return new BN(Math.round(0.15355908906 * gdpPerCapita[country])).mul(new BN('1000000000000'));
+}
+export function getDiplomaPrice(country: string) : BN {
+    return new BN(Math.round(0.007770973 * gdpPerCapita[country])).mul(new BN('1000000000000'));
 }
