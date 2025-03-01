@@ -106,7 +106,6 @@ describe('Airdrop API Tests', () => {
     });
 
     afterAll(async () => {
-        console.log('Transferring funds back to sender...');
         try {
             await transferFundsBack(api, AIRDROP_SECRET_SEED, testAccounts);
         } catch (error) {

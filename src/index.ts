@@ -123,11 +123,11 @@ app.get('/airdrop/*', (req: Request, res: Response) => {
         'SELECT amount, timestamp FROM airdrop WHERE recipient = ? LIMIT 1',
         [address]
       );
-      
+
       if (rows.length > 0) {
         const { amount, timestamp } = rows[0];
         const thirtySecondsAgo = Date.now() - 30 * 1000;
-      
+
         if (amount > 0 || (timestamp && new Date(timestamp).getTime() > thirtySecondsAgo)) {
           connection.release();
           return res.status(400).json({ success: false, error: 'DUPLICATED_AIRDROP' });
@@ -146,13 +146,20 @@ app.get('/airdrop/*', (req: Request, res: Response) => {
       const sender = keyring.addFromSeed(hexToU8a(secretSeed));
 
       const nonce = await getNextNonce(sender.address);
-      
+
       const transfer = api.tx.balances.transfer(address, transferAmount);
 
-      transfer.signAndSend(sender, { nonce }, async ({ status, events }) => {
+      // Here is the crucial part:
+      //
+      // signAndSend returns a Promise that resolves to an unsubscribe function.
+      // We capture it, do not "return" the res.json(...).
+      //
+      const unsub = await transfer.signAndSend(sender, { nonce }, async ({ status, events }) => {
         try {
           if (status.isInBlock) {
-            const success = events.some(({ event }) => event.section === 'system' && event.method === 'ExtrinsicSuccess');
+            const success = events.some(({ event }) =>
+              event.section === 'system' && event.method === 'ExtrinsicSuccess'
+            );
 
             if (success) {
               const txHash = transfer.hash.toHex();
@@ -162,22 +169,24 @@ app.get('/airdrop/*', (req: Request, res: Response) => {
               );
               connection.release();
               res.json({ success: true, amount: transferAmount.toString() });
+              return; // Now the callback returns void
             } else {
+              unsub();
               res.status(500).json({ success: false, error: 'AIRDROP_NOT_ENOUGH_FUNDS' });
+              return;
             }
           }
-        } catch (error) {
-          console.error('❌ Transaction error:', error);
+        } catch (err) {
+          unsub();
+          console.error('❌ Transaction error:', err);
           res.status(500).json({ success: false, error: 'TRANSACTION_FAILED' });
         }
-      }).catch((error) => {
-        console.error('❌ Signing error:', error);
-        res.status(500).json({ success: false, error: 'SIGNING_FAILED' });
       });
 
-    } catch (error) {
-      console.error('❌ Error processing request:', error);
-      res.status(500).json({ success: false, error: 'AIRDROP_ERROR' });
+    } catch (err) {
+      // If an error occurs before we get the unsub, we catch it here
+      console.error('Signing error:', err);
+      return res.status(500).json({ success: false, error: 'SIGNING_FAILED' });
     }
   })();
 });
