@@ -73,7 +73,7 @@ describe('Airdrop API Tests', () => {
 
     beforeAll(async () => {
         api = await getPolkadotApi();
-        testAccounts = await generateTestAccounts(2);
+        testAccounts = await generateTestAccounts(10);
     });
 
     afterAll(async () => {
