@@ -19,11 +19,6 @@ const BASE_URL = process.env.TEST_URL as string;
 const WS_PROVIDER = process.env.WS_PROVIDER || 'wss://ws-parachain-1.slonigiraf.org';
 const AIRDROP_SECRET_SEED = process.env.AIRDROP_SECRET_SEED as string;
 
-async function getPolkadotApi(): Promise<ApiPromise> {
-    const provider = new WsProvider(WS_PROVIDER);
-    return await ApiPromise.create({ provider });
-}
-
 async function getBalance(api: ApiPromise, address: string): Promise<string> {
     const accountInfo = await api.query.system.account(address) as unknown as AccountInfo;
     return accountInfo.data.free.toString();
@@ -102,10 +97,11 @@ export async function transferFundsBack(
 
 describe('Airdrop API Tests', () => {
     let testAccounts: { address: string; uri: string }[] = [];
+    const provider = new WsProvider(WS_PROVIDER);
     let api: ApiPromise;
 
     beforeAll(async () => {
-        api = await getPolkadotApi();
+        api = await ApiPromise.create({ provider });
         testAccounts = await generateTestAccounts(10);
     });
 
@@ -115,9 +111,9 @@ describe('Airdrop API Tests', () => {
         } catch (error) {
             console.error('Error transferring funds:', error);
         }
-        // Give a short delay so Polkadot JS can tear down all listeners
-        await new Promise((resolve) => setTimeout(resolve, 100));
         await api.disconnect();
+        provider.disconnect();
+        await new Promise((resolve) => setTimeout(resolve, 100));
     });
 
     test('Receive an airdrop and validate balance increase', async () => {
