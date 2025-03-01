@@ -47,7 +47,7 @@ describe('Airdrop API Tests', () => {
         const initialBalance = await getBalance(api, address);
 
         // Request airdrop
-        const response = await request(BASE_URL).get(`/?to=${address}`);
+        const response = await request(BASE_URL).get(`/airdrop/?to=${address}`);
         expect(response.status).toBe(200);
         expect(response.body.success).toBe(true);
 
@@ -68,7 +68,7 @@ describe('Airdrop API Tests', () => {
 
         // Request multiple airdrops
         const responses = await Promise.all(
-            testAddresses.slice(1).map(address => request(BASE_URL).get(`/?to=${address}`))
+            testAddresses.slice(1).map(address => request(BASE_URL).get(`/airdrop/?to=${address}`))
         );
 
         responses.forEach(response => {

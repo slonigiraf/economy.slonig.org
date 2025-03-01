@@ -101,7 +101,7 @@ async function getGeolocationData(ipAddress: string): Promise<GeoLocationData | 
   }
 }
 
-app.get('*', (req: Request, res: Response) => {
+app.get('/airdrop/*', (req: Request, res: Response) => {
   (async () => {
     try {
       const address = req.query.to as string;
