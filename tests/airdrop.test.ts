@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 import type { AccountInfo } from '@polkadot/types/interfaces';
 import '@polkadot/api-augment'; // Don't remove: https://github.com/polkadot-js/api/releases/tag/v7.0.1
 import BN from 'bn.js';
-import { precision } from '../src/utils';
+import { oneSlon } from '../src/utils';
 
 dotenv.config();
 
@@ -49,76 +49,22 @@ export async function transferFundsBack(
     // This is your main "destination" (the account you want to gather funds into)
     const recipient = keyring.addFromUri(senderSeed);
 
-    // Grab the Existential Deposit constant from the chain
-    const existentialDeposit: BN = api.consts.balances.existentialDeposit;
-
-    const transferPromises = testAccounts.map(async ({ address, uri }) => {
-        try {
-            // Read current on-chain balance
-            const balance = new BN(await getBalance(api, address));
-            console.log('address: ', address)
-            console.log('balance: ', balance)
-
-            // Check if there's enough to bother transferring
-            if (balance.gt(precision)) {
-                const amountToTransfer = balance.sub(precision);
-
-                // Prepare the sender keypair (IMPORTANT: we must use the secret URI, not just the address)
-                const sender = keyring.addFromUri(uri);
-
-                // Fetch current nonce for this sender
-                const nonce = await api.rpc.system.accountNextIndex(sender.address);
-
-                // Return a promise so we can await all at once (Promise.all)
-                return new Promise<void>((resolve, reject) => {
-                    api.tx.balances
-                        .transfer(recipient.address, amountToTransfer)
-                        .signAndSend(sender, { nonce }, (result) => {
-                            const { status, events = [] } = result;
-
-                            // When included in a block
-                            if (status.isInBlock) {
-                                console.log(`✅ [${address}] Included in block: ${status.asInBlock.toHex()}`);
-                            }
-                            // When finalized
-                            if (status.isFinalized) {
-                                console.log(`✅ [${address}] Finalized in block: ${status.asFinalized.toHex()}`);
-
-                                // Detect any on-chain ExtrinsicFailed events
-                                const extrinsicFailedEvents = events.filter(({ event }) =>
-                                    api.events.system.ExtrinsicFailed.is(event)
-                                );
-
-                                if (extrinsicFailedEvents.length > 0) {
-                                    console.error(`❌ [${address}] ExtrinsicFailed with error(s):`);
-                                    extrinsicFailedEvents.forEach(({ event: { data } }) => {
-                                        const [dispatchError] = data;
-                                        console.error(`   → ${dispatchError.toString()}`);
-                                    });
-
-                                    return reject(new Error(`ExtrinsicFailed for ${address}`));
-                                }
-
-                                console.log(`✅ [${address}] Transfer succeeded!`);
-                                resolve();
-                            }
-                        })
-                        .catch((error) => {
-                            // Catch errors in the submission (e.g., cannot broadcast)
-                            console.error(`❌ [${address}] signAndSend error:`, error);
-                            reject(error);
-                        });
-                });
+    const transfers = await Promise.all(
+        testAccounts.map(async (testAccount) => {
+            try {
+                const balance = new BN(await getBalance(api, testAccount.address));
+                if (balance.gt(oneSlon)) {
+                    const sender = keyring.addFromUri(testAccount.uri);
+                    const nonce = await api.rpc.system.accountNextIndex(sender.address);
+                    return api.tx.balances.transfer(recipient.address, balance.sub(oneSlon)).signAndSend(sender, { nonce });
+                }
+            } catch (error) {
+                console.error(`Error transferring from ${testAccount.address}:`, error);
             }
-        } catch (error) {
-            console.error(`❌ [${address}] Error during transfer:`, error);
-            // We don't throw here, because we don't want the rest to fail
-            // But you could "throw error" if you want to fail the entire process
-        }
-    });
-
-    // Wait for all transfers to finish (or fail)
-    await Promise.all(transferPromises);
+        })
+    );
+    
+    await Promise.all(transfers);
 }
 
 describe('Airdrop API Tests', () => {

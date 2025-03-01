@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import { getDiplomaPrice, getAirdropAmount, getReimbursementPrice, precision } from '../src/utils';
+import { getDiplomaPrice, getAirdropAmount, getReimbursementPrice, oneSlon } from '../src/utils';
 import BN from 'bn.js';
 dotenv.config();
 
@@ -18,8 +18,8 @@ describe('Functions Tests', () => {
     });
     test('Reimbursement price calculation', async () => {
         const country = 'US';
-        const reimbursementPrice = getReimbursementPrice(country).div(precision).toNumber();
-        const diplomaPrice = getDiplomaPrice(country).div(precision).toNumber();
+        const reimbursementPrice = getReimbursementPrice(country).div(oneSlon).toNumber();
+        const diplomaPrice = getDiplomaPrice(country).div(oneSlon).toNumber();
         expect(reimbursementPrice/diplomaPrice).toBeCloseTo(1.2,2);
     });
 });
