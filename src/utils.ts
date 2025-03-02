@@ -191,7 +191,7 @@ export const gdpPerCapita: Record<string, number> = {
 };
 export const oneSlon = new BN('1000000000000');
 export const diplomaPriceFractionOfGDPperCapita = 0.007770973;
-export const reimbursementMultiplier = 1.2;
+export const warrantyMultiplier = 1.2;
 
 export function getAirdropAmount(country: string) : BN {
     return new BN(Math.round(0.15355908906 * gdpPerCapita[country])).mul(oneSlon);
@@ -199,6 +199,6 @@ export function getAirdropAmount(country: string) : BN {
 export function getDiplomaPrice(country: string) : BN {
     return new BN(Math.round(diplomaPriceFractionOfGDPperCapita * gdpPerCapita[country])).mul(oneSlon);
 }
-export function getReimbursementAmount(country: string): BN {
-    return new BN(Math.round(reimbursementMultiplier * diplomaPriceFractionOfGDPperCapita * gdpPerCapita[country])).mul(oneSlon);
+export function getWarrantyAmount(country: string): BN {
+    return new BN(Math.round(warrantyMultiplier * diplomaPriceFractionOfGDPperCapita * gdpPerCapita[country])).mul(oneSlon);
 }

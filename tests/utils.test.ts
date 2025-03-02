@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-import { getDiplomaPrice, getAirdropAmount, getReimbursementAmount, oneSlon } from '../src/utils';
+import { getDiplomaPrice, getAirdropAmount, getWarrantyAmount, oneSlon } from '../src/utils';
 import BN from 'bn.js';
 dotenv.config();
 
@@ -16,10 +16,10 @@ describe('Functions Tests', () => {
         expect(diplomaPrice.toString()).toBe('512000000000000');
         expect(maxDiplomaCount.toNumber()).toBeGreaterThan(19);
     });
-    test('Reimbursement price calculation', async () => {
+    test('Warranty price calculation', async () => {
         const country = 'US';
-        const reimbursementAmount = getReimbursementAmount(country).div(oneSlon).toNumber();
+        const warrantyAmount = getWarrantyAmount(country).div(oneSlon).toNumber();
         const diplomaPrice = getDiplomaPrice(country).div(oneSlon).toNumber();
-        expect(reimbursementAmount/diplomaPrice).toBeCloseTo(1.2,2);
+        expect(warrantyAmount/diplomaPrice).toBeCloseTo(1.2,2);
     });
 });

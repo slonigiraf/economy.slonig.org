@@ -5,7 +5,7 @@ import { Keyring } from '@polkadot/keyring';
 import { hexToU8a } from '@polkadot/util';
 import mysql from 'mysql2/promise';
 import { fetch } from 'undici';
-import { getAirdropAmount, getDiplomaPrice, getReimbursementAmount } from './utils';
+import { getAirdropAmount, getDiplomaPrice, getWarrantyAmount } from './utils';
 import BN from 'bn.js';
 import '@polkadot/api-augment'; // Don't remove: https://github.com/polkadot-js/api/releases/tag/v7.0.1
 
@@ -201,7 +201,7 @@ app.get('/prices/*', (req: Request, res: Response) => {
         success: true,
         airdrop: getAirdropAmount(country).toString(),
         diploma: getDiplomaPrice(country).toString(),
-        reimbursement: getReimbursementAmount(country).toString()
+        warranty: getWarrantyAmount(country).toString()
       });
     } catch (err) {
       console.error('Prices error:', err);
