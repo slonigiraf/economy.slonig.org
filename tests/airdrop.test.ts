@@ -116,7 +116,7 @@ describe('Airdrop API Tests', () => {
         await new Promise((resolve) => setTimeout(resolve, 100));
     });
 
-    test('Receive an airdrop and validate balance increase', async () => {
+    test('Receive an airdrop only once', async () => {
         const address = testAccounts[0].address;
 
         // Fetch initial balance
@@ -134,6 +134,17 @@ describe('Airdrop API Tests', () => {
 
         // Validate balance increase
         expect(BigInt(finalBalance)).toBe(BigInt(initialBalance) + BigInt(expectedIncrease));
+
+        // Fail to get airdrop twice
+        const response2 = await request(BASE_URL).get(`/airdrop/?to=${address}`);
+        expect(response2.status).toBe(400);
+        expect(response2.body.success).toBe(false);
+        expect(response2.body.error).toBe('DUPLICATED_AIRDROP');
+        // Fetch new balance
+        const sameBalance = await getBalance(api, address);
+
+        // Validate balance was not increased
+        expect(BigInt(sameBalance)).toBe(BigInt(finalBalance));
     }, testTimeout);
 
     test('Check multiple airdrops and validate balances', async () => {
