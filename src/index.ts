@@ -5,7 +5,7 @@ import { Keyring } from '@polkadot/keyring';
 import { hexToU8a } from '@polkadot/util';
 import mysql from 'mysql2/promise';
 import { fetch } from 'undici';
-import { getAirdropAmount } from './utils';
+import { getAirdropAmount, getDiplomaPrice, getReimbursementAmount } from './utils';
 import BN from 'bn.js';
 import '@polkadot/api-augment'; // Don't remove: https://github.com/polkadot-js/api/releases/tag/v7.0.1
 
@@ -191,6 +191,24 @@ app.get('/airdrop/*', (req: Request, res: Response) => {
   })();
 });
 
+app.get('/prices/*', (req: Request, res: Response) => {
+  (async () => {
+    try {
+      const ipAddress = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'unknown';
+      const geoData = await getGeolocationData(ipAddress);
+      const country = geoData?.countryCode || 'US';
+      res.json({
+        success: true,
+        airdrop: getAirdropAmount(country).toString(),
+        diploma: getDiplomaPrice(country).toString(),
+        reimbursement: getReimbursementAmount(country).toString()
+      });
+    } catch (err) {
+      console.error('Prices error:', err);
+      return res.status(500).json({ success: false, error: 'PRICES_FAILED' });
+    }
+  })();
+});
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
