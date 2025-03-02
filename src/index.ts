@@ -106,18 +106,29 @@ async function getGeolocationData(ipAddress: string): Promise<GeoLocationData | 
 app.get('/airdrop/*', (req: Request, res: Response) => {
   (async () => {
     try {
-      const address = req.query.to as string;
-      const ipAddress = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'unknown';
+      const AUTH_TOKEN = process.env.AUTH_TOKEN;
+      if (!AUTH_TOKEN) {
+        return res.status(500).json({ success: false, error: 'AUTH_TOKEN_NOT_SET' });
+      }
+      
+      const SECRET_SEED = process.env.AIRDROP_SECRET_SEED;
+      if (!SECRET_SEED) {
+        return res.status(500).json({ success: false, error: 'AIRDROP_SECRET_SEED_NOT_SET' });
+      }
 
+      const auth = req.query.auth as string;
+      if (auth  !== AUTH_TOKEN) {
+        return res.status(400).json({ success: false, error: 'WRONG_AUTH_TOKEN' });
+      }
+
+      const address = req.query.to as string;
       if (!address || address.length < 10) {
         return res.status(400).json({ success: false, error: 'INVALID_ACCOUNT' });
       }
 
+      const ipAddress = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'unknown';
+
       const api = await getPolkadotApi();
-      const secretSeed = process.env.AIRDROP_SECRET_SEED;
-      if (!secretSeed) {
-        return res.status(500).json({ success: false, error: 'AIRDROP_SECRET_SEED_NOT_SET' });
-      }
 
       const connection = await pool.getConnection();
 
@@ -145,7 +156,7 @@ app.get('/airdrop/*', (req: Request, res: Response) => {
       const country = geoData?.countryCode || 'US';
       const transferAmount = getAirdropAmount(country)
       const keyring = new Keyring({ type: 'sr25519' });
-      const sender = keyring.addFromSeed(hexToU8a(secretSeed));
+      const sender = keyring.addFromSeed(hexToU8a(SECRET_SEED));
 
       const nonce = await getNextNonce(sender.address);
 

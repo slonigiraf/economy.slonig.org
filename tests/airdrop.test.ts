@@ -18,6 +18,7 @@ jest.setTimeout(testTimeout + wsProviderDisconnectTime);
 const BASE_URL = process.env.TEST_URL as string;
 const WS_PROVIDER = process.env.WS_PROVIDER || 'wss://ws-parachain-1.slonigiraf.org';
 const AIRDROP_SECRET_SEED = process.env.AIRDROP_SECRET_SEED as string;
+const AUTH_TOKEN = process.env.AUTH_TOKEN as string;
 
 async function getBalance(api: ApiPromise, address: string): Promise<string> {
     const accountInfo = await api.query.system.account(address) as unknown as AccountInfo;
@@ -116,14 +117,25 @@ describe('Airdrop API Tests', () => {
         await new Promise((resolve) => setTimeout(resolve, 100));
     });
 
-    test('Receive an airdrop only once', async () => {
+    test('Should fail on a wrong auth token', async () => {
         const address = testAccounts[0].address;
+        const initialBalance = await getBalance(api, address);
+        const response = await request(BASE_URL).get(`/airdrop/?to=${address}&auth=wrong`);
+        expect(response.status).toBe(400);
+        expect(response.body.success).toBe(false);
+        expect(response.body.error).toBe('WRONG_AUTH_TOKEN');
+        const sameBalance = await getBalance(api, address);
+        expect(BigInt(sameBalance)).toBe(BigInt(initialBalance));
+    }, testTimeout);
+
+    test('Receive an airdrop only once', async () => {
+        const address = testAccounts[1].address;
 
         // Fetch initial balance
         const initialBalance = await getBalance(api, address);
 
         // Request airdrop
-        const response = await request(BASE_URL).get(`/airdrop/?to=${address}`);
+        const response = await request(BASE_URL).get(`/airdrop/?to=${address}&auth=${AUTH_TOKEN}`);
         expect(response.status).toBe(200);
         expect(response.body.success).toBe(true);
 
@@ -136,7 +148,7 @@ describe('Airdrop API Tests', () => {
         expect(BigInt(finalBalance)).toBe(BigInt(initialBalance) + BigInt(expectedIncrease));
 
         // Fail to get airdrop twice
-        const response2 = await request(BASE_URL).get(`/airdrop/?to=${address}`);
+        const response2 = await request(BASE_URL).get(`/airdrop/?to=${address}&auth=${AUTH_TOKEN}`);
         expect(response2.status).toBe(400);
         expect(response2.body.success).toBe(false);
         expect(response2.body.error).toBe('DUPLICATED_AIRDROP');
@@ -148,11 +160,11 @@ describe('Airdrop API Tests', () => {
     }, testTimeout);
 
     test('Check multiple airdrops and validate balances', async () => {
-        const initialBalances = await Promise.all(testAccounts.slice(1).map(account => getBalance(api, account.address)));
+        const initialBalances = await Promise.all(testAccounts.slice(2).map(account => getBalance(api, account.address)));
 
         // Request multiple airdrops
         const responses = await Promise.all(
-            testAccounts.slice(1).map(account => request(BASE_URL).get(`/airdrop/?to=${account.address}`))
+            testAccounts.slice(2).map(account => request(BASE_URL).get(`/airdrop/?to=${account.address}&auth=${AUTH_TOKEN}`))
         );
 
         responses.forEach(response => {
@@ -162,7 +174,7 @@ describe('Airdrop API Tests', () => {
 
         const expectedIncreases = responses.map(response => BigInt(response.body.amount));
 
-        const finalBalances = await Promise.all(testAccounts.slice(1).map(account => getBalance(api, account.address)));
+        const finalBalances = await Promise.all(testAccounts.slice(2).map(account => getBalance(api, account.address)));
 
         // Validate each balance increase
         finalBalances.forEach((finalBalance, index) => {
