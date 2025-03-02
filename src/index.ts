@@ -8,8 +8,10 @@ import { fetch } from 'undici';
 import { getAirdropAmount, getDiplomaPrice, getWarrantyAmount } from './utils';
 import BN from 'bn.js';
 import '@polkadot/api-augment'; // Don't remove: https://github.com/polkadot-js/api/releases/tag/v7.0.1
+import cors from 'cors';
 
 const app = express();
+app.use(cors());
 const PORT: number = parseInt(process.env.PORT || '3000', 10);
 
 // Initialize MySQL connection
