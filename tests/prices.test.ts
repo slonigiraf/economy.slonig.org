@@ -1,6 +1,6 @@
 import request from 'supertest';
 import dotenv from 'dotenv';
-import { getDiplomaPrice, getAirdropAmount, getWarrantyAmount } from '../src/utils';
+import { getDiplomaPrice, getAirdropAmount, getWarrantyAmount, DAYS_VALID } from '../src/utils';
 dotenv.config();
 const BASE_URL = process.env.TEST_URL as string;
 
@@ -13,5 +13,6 @@ describe('Prices API Tests', () => {
         expect(response.body.airdrop).toBe(getAirdropAmount(countryOfLocalHost).toString());
         expect(response.body.diploma).toBe(getDiplomaPrice(countryOfLocalHost).toString());
         expect(response.body.warranty).toBe(getWarrantyAmount(countryOfLocalHost).toString());
+        expect(response.body.daysValid).toBe(DAYS_VALID);
     });
 });

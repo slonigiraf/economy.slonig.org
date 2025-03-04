@@ -189,6 +189,7 @@ export const gdpPerCapita: Record<string, number> = {
     BI: 254,
     LO: 65875
 };
+export const DAYS_VALID = 730;
 export const oneSlon = new BN('1000000000000');
 export const diplomaPriceFractionOfGDPperCapita = 0.007770973;
 export const warrantyMultiplier = 1.2;
