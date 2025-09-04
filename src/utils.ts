@@ -1,4 +1,5 @@
 import BN from 'bn.js';
+import crypto from 'crypto';
 
 export const gdpPerCapita: Record<string, number> = {
     LU: 106343,
@@ -202,4 +203,23 @@ export function getDiplomaPrice(country: string) : BN {
 }
 export function getWarrantyAmount(country: string): BN {
     return new BN(Math.round(warrantyMultiplier * diplomaPriceFractionOfGDPperCapita * gdpPerCapita[country])).mul(oneSlon);
+}
+
+export function hashRecipient(address: string): string {
+  return crypto.createHash('sha256').update(address).digest('hex');
+}
+
+export function maskIp(ip: string): string {
+  if (!ip) return 'unknown';
+  if (ip.includes(':')) {
+    // IPv6: keep first 6 hextets, mask last 2
+    return ip.split(':').slice(0, 6).join(':') + '::';
+  } else {
+    // IPv4: keep first 2 octets
+    const parts = ip.split('.');
+    if (parts.length === 4) {
+      return `${parts[0]}.${parts[1]}.0.0`;
+    }
+  }
+  return ip;
 }

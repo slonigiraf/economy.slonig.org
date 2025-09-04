@@ -5,10 +5,11 @@ import { Keyring } from '@polkadot/keyring';
 import { hexToU8a } from '@polkadot/util';
 import mysql from 'mysql2/promise';
 import { fetch } from 'undici';
-import { VALIDITY, getAirdropAmount, getDiplomaPrice, getWarrantyAmount } from './utils';
+import { VALIDITY, getAirdropAmount, getDiplomaPrice, getWarrantyAmount, hashRecipient, maskIp } from './utils';
 import BN from 'bn.js';
 import '@polkadot/api-augment'; // Don't remove: https://github.com/polkadot-js/api/releases/tag/v7.0.1
 import cors from 'cors';
+
 
 const app = express();
 app.use(cors());
@@ -110,14 +111,14 @@ app.get('/airdrop/*', (req: Request, res: Response) => {
       if (!AUTH_TOKEN) {
         return res.status(500).json({ success: false, error: 'AUTH_TOKEN_NOT_SET' });
       }
-      
+
       const SECRET_SEED = process.env.AIRDROP_SECRET_SEED;
       if (!SECRET_SEED) {
         return res.status(500).json({ success: false, error: 'AIRDROP_SECRET_SEED_NOT_SET' });
       }
 
       const auth = req.query.auth as string;
-      if (auth  !== AUTH_TOKEN) {
+      if (auth !== AUTH_TOKEN) {
         return res.status(400).json({ success: false, error: 'WRONG_AUTH_TOKEN' });
       }
 
@@ -132,9 +133,12 @@ app.get('/airdrop/*', (req: Request, res: Response) => {
 
       const connection = await pool.getConnection();
 
+      const recipientHash = hashRecipient(address);
+      const maskedIp = maskIp(ipAddress);
+
       const [rows] = await connection.query<any[]>(
-        'SELECT amount, timestamp FROM airdrop WHERE recipient = ? LIMIT 1',
-        [address]
+        'SELECT amount, timestamp FROM airdrop WHERE recipient_hash = ? LIMIT 1',
+        [recipientHash]
       );
 
       if (rows.length > 0) {
@@ -148,8 +152,8 @@ app.get('/airdrop/*', (req: Request, res: Response) => {
       }
 
       await connection.query(
-        `INSERT IGNORE INTO airdrop (recipient, amount, ip_address) VALUES (?, ?, ?)`,
-        [address, 0, ipAddress]
+        `INSERT IGNORE INTO airdrop (recipient_hash, amount, ip_address) VALUES (?, ?, ?)`,
+        [recipientHash, 0, maskedIp]
       );
 
       const geoData = await getGeolocationData(ipAddress);
@@ -177,8 +181,8 @@ app.get('/airdrop/*', (req: Request, res: Response) => {
             if (success) {
               const txHash = transfer.hash.toHex();
               await connection.query(
-                `UPDATE airdrop SET tx_hash = ?, amount = ?, country = ?, country_code = ?, region = ?, region_name = ?, city = ?, zip = ?, latitude = ?, longitude = ?, timezone = ?, isp = ? WHERE recipient = ?`,
-                [txHash, transferAmount.toString(), geoData?.country || null, geoData?.countryCode || null, geoData?.region || null, geoData?.regionName || null, geoData?.city || null, geoData?.zip || null, geoData?.lat || null, geoData?.lon || null, geoData?.timezone || null, geoData?.isp || null, address]
+                `UPDATE airdrop SET tx_hash = ?, amount = ?, country = ?, country_code = ?, region = ?, region_name = ?, city = ?, timezone = ? WHERE recipient_hash = ?`,
+                [txHash, transferAmount.toString(), geoData?.country || null, geoData?.countryCode || null, geoData?.region || null, geoData?.regionName || null, geoData?.city || null, geoData?.timezone || null, recipientHash]
               );
               connection.release();
               res.json({ success: true, amount: transferAmount.toString() });
